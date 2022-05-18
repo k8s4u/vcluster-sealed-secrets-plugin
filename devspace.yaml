@@ -1,0 +1,90 @@
+version: v1beta11
+vars:
+  - name: PLUGIN_IMAGE
+    value: docker.io/k8s4u/vcluster-sealed-secrets-plugin
+  - name: K3S_IMAGE
+    value: rancher/k3s:v1.23.5-k3s1
+  - name: SERVICE_CIDR
+    command: vcluster get service-cidr
+images:
+  plugin:
+    image: ${PLUGIN_IMAGE}
+    dockerfile: ./Dockerfile.dev
+    rebuildStrategy: ignoreContextChanges
+    build:
+      buildKit:
+        options:
+          target: builder
+hooks:
+  - name: Install Dependencies
+    events: ["after:deploy"]
+    command: |-
+      # Install dependencies
+      if [ ! -d "vendor" ]; then
+        echo "Executing 'go mod vendor'..."
+        go mod vendor
+      fi
+deployments:
+  - name: vcluster
+    helm:
+      chart:
+        name: vcluster
+        repo: https://charts.loft.sh
+        version: v0.9.1-beta.0
+      values:
+        plugin:
+          sealed-secrets:
+            image: ${PLUGIN_IMAGE}
+            workingDir: /plugin-dev
+        serviceCIDR: ${SERVICE_CIDR}
+        serviceAccount:
+          create: false
+          name: default
+        vcluster:
+          image: ${K3S_IMAGE}
+        rbac:
+          clusterRole:
+            create: false
+          role:
+            extended: false
+        syncer:
+          env:
+          - name: DEBUG
+            value: "true"
+          readinessProbe:
+            enabled: false
+          livenessProbe:
+            enabled: false
+        isolation:
+          enabled: true
+          podSecurityStandard: restricted
+          resourceQuota:
+            enabled: false
+          limitRange:
+            enabled: false
+          networkPolicy:
+            enabled: false
+dev:
+  terminal:
+    imageSelector: ${PLUGIN_IMAGE}
+    command: ["./devspace_start.sh"]
+  ports:
+    - imageSelector: ${PLUGIN_IMAGE}
+      forward:
+        - port: 2346
+          remotePort: 2345
+  sync:
+    - imageSelector: ${PLUGIN_IMAGE}
+      excludePaths:
+        - '**'
+        - '!/pkg'
+        - '!/cmd'
+        - '!/vendor'
+        - '!/hack'
+        - '!/hooks'
+        - '!/go.mod'
+        - '!/go.sum'
+        - '!/devspace_start.sh'
+        - '!/manifests'
+        - '!/syncers'
+        - '!/tls'

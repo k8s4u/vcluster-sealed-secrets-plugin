@@ -1,0 +1,4 @@
+plugin:
+  sealed-secrets:
+    image: docker.io/k8s4u/vcluster-sealed-secrets-plugin:0.0.2
+    imagePullPolicy: IfNotPresent
