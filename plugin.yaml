@@ -1,3 +1,6 @@
+vcluster:
+  image: rancher/k3s:v1.23.3-k3s1
+
 plugin:
   sealed-secrets:
     image: docker.io/k8s4u/vcluster-sealed-secrets-plugin:0.0.2

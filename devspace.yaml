@@ -85,6 +85,5 @@ dev:
         - '!/go.mod'
         - '!/go.sum'
         - '!/devspace_start.sh'
-        - '!/manifests'
         - '!/syncers'
         - '!/tls'

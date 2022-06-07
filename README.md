@@ -11,3 +11,21 @@ On other hand secrets inside of Kubernetes are still non-encrypted so pods can u
 
 **NOTE!!!** Currently hardcoded certificates from folder *tls* is used.
 Do **NOT** use those in production.
+
+
+## Using the Plugin
+
+At least version [0.9.1-beta.0](https://github.com/loft-sh/vcluster/releases/tag/v0.9.1-beta.0) of vcluster is needed.
+
+To use the plugin, create a new vcluster with the `plugin.yaml`:
+
+```
+# Use public plugin.yaml
+vcluster create vcluster -n vcluster -f https://raw.githubusercontent.com/k8s4u/vcluster-sealed-secrets-plugin/main/plugin.yaml
+```
+
+After vcluster is started create test secret and immediately read its content:
+```
+vcluster connect vcluster --namespace vcluster -- kubectl create secret generic my-secret --from-literal=key1=supersecret
+vcluster connect vcluster --namespace vcluster -- kubectl get secret my-secret -o yaml
+```

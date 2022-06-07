@@ -22,6 +22,4 @@ WORKDIR /
 COPY /tls /tls
 COPY --from=builder /plugin .
 
-COPY manifests/ /manifests/
-
 ENTRYPOINT ["/plugin"]
