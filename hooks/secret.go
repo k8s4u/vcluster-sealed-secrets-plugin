@@ -3,7 +3,6 @@ package hooks
 import (
 	"context"
 	"crypto/rsa"
-	"encoding/base64"
 	"errors"
 	"fmt"
 
@@ -43,7 +42,8 @@ func (s *secretHook) Resource() client.Object {
 }
 
 var _ hook.MutateGetVirtual = &secretHook{}
-var _ hook.MutateCreateVirtual = &secretHook{}
+
+// var _ hook.MutateCreateVirtual = &secretHook{}
 var _ hook.MutateCreatePhysical = &secretHook{}
 
 func readPrivKey() (*rsa.PrivateKey, error) {
@@ -81,10 +81,27 @@ func (s *secretHook) MutateGetVirtual(ctx context.Context, obj client.Object) (c
 	if !ok {
 		return nil, fmt.Errorf("object %v is not a secret", obj)
 	}
+
+	// fmt.Printf("MutateGetVirtual: secret data: %s\n", secret.Data)
+
+	/*
+		pubKey, err := readPubKey()
+		if err != nil {
+			return nil, err
+		}
+
+		ssecret2, err := ssv1alpha1.NewSealedSecret(scheme.Codecs, pubKey, secret)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("MutateGetVirtual: secret encrypted data: %s\n", ssecret2.Spec.EncryptedData)
+	*/
 	return secret, nil
 }
 
 // Protect secret by encrypting its data before creating it unless it is already encrypted
+/*
 func (p *secretHook) MutateCreateVirtual(ctx context.Context, obj client.Object) (client.Object, error) {
 	fmt.Println("MutateCreateVirtual called")
 
@@ -138,9 +155,11 @@ func (p *secretHook) MutateCreateVirtual(ctx context.Context, obj client.Object)
 	fmt.Println("MutateCreateVirtual: Replacing secret with encrypted version")
 	return secret, nil
 }
+*/
 
 // Decrypt secret data before creating physical secret
 func (p *secretHook) MutateCreatePhysical(ctx context.Context, obj client.Object) (client.Object, error) {
+	fmt.Println("MutateCreatePhysical called")
 	secret, ok := obj.(*corev1.Secret)
 	if !ok {
 		return nil, fmt.Errorf("object %v is not a secret", obj)
@@ -162,9 +181,12 @@ func (p *secretHook) MutateCreatePhysical(ctx context.Context, obj client.Object
 
 	unsealedSecret, err := ssecret.Unseal(scheme.Codecs, priKey)
 	if err != nil {
-		return nil, err
+		fmt.Printf("MutateCreatePhysical: Secret looks to be already non-encrypted, error: %s\n", err)
+		return secret, nil
 	}
 
 	secret.Data = unsealedSecret.Data
+
+	fmt.Println("MutateCreatePhysical: Replacing secret with non-encrypted version")
 	return secret, nil
 }

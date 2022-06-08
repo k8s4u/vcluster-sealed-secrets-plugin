@@ -27,6 +27,7 @@ vcluster create vcluster -n vcluster -f https://raw.githubusercontent.com/k8s4u/
 After vcluster is started create test secret and immediately read its content:
 ```
 vcluster connect vcluster --namespace vcluster -- kubectl create secret generic my-secret --from-literal=key1=supersecret
+vcluster connect vcluster --namespace vcluster -- kubectl annotate secret my-secret vcluster.loft.sh/force-sync=true
 vcluster connect vcluster --namespace vcluster -- kubectl get secret my-secret -o yaml
 ```
 
@@ -92,4 +93,14 @@ You can now change a file locally in your IDE and then restart the command in th
 Delete the development environment with:
 ```
 devspace purge -n vcluster
+```
+
+
+### TODO
+Fix this. Needs learning about sealed secrets logic..
+```
+MutateGetVirtual called
+MutateCreatePhysical called
+MutateCreatePhysical: Secret looks to be already non-encrypted, error: no key could decrypt secret (key1)
+MutateGetVirtual called
 ```
