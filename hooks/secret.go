@@ -44,6 +44,7 @@ func (s *secretHook) Resource() client.Object {
 
 var _ hook.MutateGetVirtual = &secretHook{}
 var _ hook.MutateCreateVirtual = &secretHook{}
+var _ hook.MutateCreatePhysical = &secretHook{}
 
 func readPrivKey() (*rsa.PrivateKey, error) {
 	key, err := keyutil.PrivateKeyFromFile(tlsKeyFile)
@@ -73,25 +74,59 @@ func readPubKey() (*rsa.PublicKey, error) {
 	}
 }
 
-// Protect secret by encrypting its data before send its content to client
+// For some reason hooks does not get triggered without this
 func (s *secretHook) MutateGetVirtual(ctx context.Context, obj client.Object) (client.Object, error) {
+	fmt.Println("MutateGetVirtual called")
+	secret, ok := obj.(*corev1.Secret)
+	if !ok {
+		return nil, fmt.Errorf("object %v is not a secret", obj)
+	}
+	return secret, nil
+}
+
+// Protect secret by encrypting its data before creating it unless it is already encrypted
+func (p *secretHook) MutateCreateVirtual(ctx context.Context, obj client.Object) (client.Object, error) {
+	fmt.Println("MutateCreateVirtual called")
+
 	secret, ok := obj.(*corev1.Secret)
 	if !ok {
 		return nil, fmt.Errorf("object %v is not a secret", obj)
 	}
 
+	privKey, err := readPrivKey()
+	if err != nil {
+		return nil, err
+	}
+	priKey := map[string]*rsa.PrivateKey{"key": privKey}
+
+	ssecret := ssv1alpha1.SealedSecret{}
+
+	newEncryptedData := map[string]string{}
+	for key, value := range secret.Data {
+		newEncryptedData[key] = string(value)
+	}
+	ssecret.Spec.EncryptedData = newEncryptedData
+
+	// If we are able to unseal secret it means that is already encrypted
+	_, err = ssecret.Unseal(scheme.Codecs, priKey)
+	if err == nil {
+		fmt.Println("MutateCreateVirtual: secret looks to be already encrypted")
+		return secret, nil
+	}
+
+	// On other why let's encrypt it
 	pubKey, err := readPubKey()
 	if err != nil {
 		return nil, err
 	}
 
-	ssecret, err := ssv1alpha1.NewSealedSecret(scheme.Codecs, pubKey, secret)
+	ssecret2, err := ssv1alpha1.NewSealedSecret(scheme.Codecs, pubKey, secret)
 	if err != nil {
 		return nil, err
 	}
 
 	newSecretData := map[string][]byte{}
-	for key, value := range ssecret.Spec.EncryptedData {
+	for key, value := range ssecret2.Spec.EncryptedData {
 		valueBytes, err := base64.StdEncoding.DecodeString(value)
 		if err != nil {
 			return nil, err
@@ -100,11 +135,12 @@ func (s *secretHook) MutateGetVirtual(ctx context.Context, obj client.Object) (c
 	}
 	secret.Data = newSecretData
 
+	fmt.Println("MutateCreateVirtual: Replacing secret with encrypted version")
 	return secret, nil
 }
 
-// Decrypt secret data before creating it
-func (p *secretHook) MutateCreateVirtual(ctx context.Context, obj client.Object) (client.Object, error) {
+// Decrypt secret data before creating physical secret
+func (p *secretHook) MutateCreatePhysical(ctx context.Context, obj client.Object) (client.Object, error) {
 	secret, ok := obj.(*corev1.Secret)
 	if !ok {
 		return nil, fmt.Errorf("object %v is not a secret", obj)
@@ -125,9 +161,10 @@ func (p *secretHook) MutateCreateVirtual(ctx context.Context, obj client.Object)
 	ssecret.Spec.EncryptedData = newEncryptedData
 
 	unsealedSecret, err := ssecret.Unseal(scheme.Codecs, priKey)
-	if err == nil {
-		secret.Data = unsealedSecret.Data
+	if err != nil {
+		return nil, err
 	}
 
+	secret.Data = unsealedSecret.Data
 	return secret, nil
 }
